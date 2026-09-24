@@ -9,6 +9,10 @@ import {
 } from '@nestjs/common';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import { REQUEST_ID_HEADER } from '../common/constants/request.constants';
+import {
+  SorobanErrorCode,
+  SorobanRpcError,
+} from '../stellar/services/soroban-rpc-client.service';
 
 describe('GlobalExceptionFilter', () => {
   let filter: GlobalExceptionFilter;
@@ -112,9 +116,28 @@ describe('GlobalExceptionFilter', () => {
     );
   });
 
+  it('normalizes uncaught SorobanRpcError via the safety net', () => {
+    const exception = new SorobanRpcError(
+      SorobanErrorCode.TIMEOUT,
+      'Soroban RPC request timed out after 30000ms',
+    );
+
+    filter.catch(exception, mockArgumentsHost);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(
+      HttpStatus.GATEWAY_TIMEOUT,
+    );
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      code: ErrorCode.STEL_RPC_TIMEOUT,
+      message: exception.message,
+      details: { sorobanCode: SorobanErrorCode.TIMEOUT },
+      requestId: 'req-123',
+    });
+  });
+
   it('hides internal error messages in production mode', () => {
-    const originalNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
+    const originalNodeEnv = process['env']['NODE_ENV'];
+    process['env']['NODE_ENV'] = 'production';
 
     filter.catch(new Error('Unexpected database error'), mockArgumentsHost);
 
@@ -127,6 +150,6 @@ describe('GlobalExceptionFilter', () => {
       requestId: 'req-123',
     });
 
-    process.env.NODE_ENV = originalNodeEnv;
+    process['env']['NODE_ENV'] = originalNodeEnv;
   });
 });

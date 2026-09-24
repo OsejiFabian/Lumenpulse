@@ -66,22 +66,38 @@ interface OperationsResponse {
     records: HorizonOperation[];
   };
 }
+import { CacheService } from '../cache/cache.service';
+import {
+  HorizonClientService,
+  HorizonOperation,
+  HorizonTransaction,
+} from '../stellar/services/horizon-client.service';
 
 @Injectable()
 export class TransactionService {
   private readonly logger = new Logger(TransactionService.name);
-  private readonly horizonUrl: string;
   private readonly useMockData: boolean;
 
-  constructor(private configService: ConfigService) {
-    const network = this.configService.get('STELLAR_NETWORK', 'testnet');
-    this.horizonUrl =
-      network === 'testnet'
-        ? 'https://horizon-testnet.stellar.org'
-        : 'https://horizon.stellar.org';
-
+  constructor(
+    private configService: ConfigService,
+    private cacheService: CacheService,
+    private horizonClient: HorizonClientService,
+  ) {
     this.useMockData =
       this.configService.get('USE_MOCK_TRANSACTIONS', 'true') === 'true';
+
+    this.cacheService.setCacheConfig({
+      balanceCacheTTL: this.configService.get<number>(
+        'STELLAR_BALANCE_CACHE_TTL',
+        30_000,
+      ),
+      operationsCacheTTL: this.configService.get<number>(
+        'STELLAR_OPERATIONS_CACHE_TTL',
+        15_000,
+      ),
+      contractReadTTL: 60_000,
+    });
+
     if (this.useMockData) {
       this.logger.log('Using mock transaction data for testing');
     }
@@ -99,37 +115,30 @@ export class TransactionService {
       return getMockTransactions(limit, cursor);
     }
 
+    return this.cacheService.getAccountOperationsCached(
+      publicKey,
+      limit,
+      async () => this.fetchTransactionHistory(publicKey, limit, cursor),
+      cursor,
+    );
+  }
+
+  private async fetchTransactionHistory(
+    publicKey: string,
+    limit: number,
+    cursor?: string,
+  ): Promise<{ transactions: TransactionDto[]; nextPage?: string }> {
     try {
-      let url = `${this.horizonUrl}/accounts/${publicKey}/transactions?order=desc&limit=${limit}`;
-      if (cursor) {
-        url += `&cursor=${cursor}`;
-      }
+      const { transactions: horizonTransactions, nextPage } =
+        await this.horizonClient.getTransactions(publicKey, limit, cursor);
 
-      const response = await fetch(url);
-      const data = (await response.json()) as
-        | HorizonResponse
-        | HorizonErrorResponse;
-
-      if (!response.ok) {
-        const errorDetail = (data as HorizonErrorResponse).detail;
-        const errorMessage = errorDetail || 'Failed to fetch transactions';
-        throw new Error(errorMessage);
-      }
-
-      const horizonData = data as HorizonResponse;
       const transactions = await this.processTransactions(
-        horizonData._embedded.records,
+        horizonTransactions,
         publicKey,
       );
-      let nextPage: string | undefined;
-
-      if (horizonData._links?.next?.href) {
-        const nextUrl = new URL(horizonData._links.next.href);
-        nextPage = nextUrl.searchParams.get('cursor') || undefined;
-      }
 
       return { transactions, nextPage };
-    } catch (error) {
+    } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to fetch transactions: ${errorMessage}`);
@@ -164,19 +173,7 @@ export class TransactionService {
   private async getTransactionOperations(
     transactionId: string,
   ): Promise<HorizonOperation[]> {
-    try {
-      const url = `${this.horizonUrl}/transactions/${transactionId}/operations`;
-      const response = await fetch(url);
-      const data = (await response.json()) as OperationsResponse;
-      return data._embedded?.records || [];
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(
-        `Failed to fetch operations for ${transactionId}: ${errorMessage}`,
-      );
-      return [];
-    }
+    return this.horizonClient.getOperations(transactionId);
   }
 
   private mapToTransactionDto(

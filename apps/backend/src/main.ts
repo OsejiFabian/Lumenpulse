@@ -1,14 +1,22 @@
+import './lib/config';
 import { NestFactory } from '@nestjs/core';
-import 'dotenv/config';
+import { VersioningType } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { setupApp } from './bootstrap/app.setup';
+import { config } from './lib/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   setupApp(app);
 
-  const config = new DocumentBuilder()
+  // Enable graceful shutdown hooks
+  app.enableShutdownHooks();
+
+  // URI versioning: /v1/config/stellar, /v2/... etc.
+  app.enableVersioning({ type: VersioningType.URI });
+
+  const swaggerConfig = new DocumentBuilder()
     .setTitle('LumenPulse API')
     .setDescription(
       [
@@ -38,20 +46,34 @@ async function bootstrap() {
       'JWT-auth',
     )
     .addTag('auth', 'Authentication and authorization endpoints')
+    .addTag('config', 'Client-safe testnet/mainnet runtime configuration')
+    .addTag('transactions', 'Transaction history and Stellar ledger queries')
+    .addTag(
+      'soroban-events',
+      'Soroban smart contract event ingestion and tracking',
+    )
     .addTag('users', 'User profile and account management')
     .addTag('news', 'Crypto news aggregation and sentiment analysis')
     .addTag('portfolio', 'Portfolio tracking and performance metrics')
     .addTag('stellar', 'Stellar blockchain integration')
+    .addTag('search', 'Search and discovery endpoints')
+    .addTag(
+      'demo-bootstrap',
+      'Testnet demo data bootstrap endpoints (admin only, testnet only)',
+    )
+    .addTag('contributor-feed', 'Aggregated contributor activity feed')
+    .addTag(
+      'contributor-registry',
+      'On-chain contributor registration and reputation',
+    )
     .addServer('http://localhost:3000', 'Development')
     .addServer('https://api.lumenpulse.io', 'Production')
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT ?? 3000;
-
-  // await app.listen(port);
+  const port = config.port;
   await app.listen(port);
 
   console.log(`Application is running on: http://localhost:${port}`);

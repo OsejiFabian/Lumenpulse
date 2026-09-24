@@ -290,7 +290,9 @@ dependencies = [
 name = "crowdfund_vault"
 version = "0.0.0"
 dependencies = [
+ "idempotency-guard",
  "notification_interface",
+ "reentrancy-guard",
  "soroban-sdk",
 ]
 
@@ -753,6 +755,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "idempotency-guard"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -793,9 +802,13 @@ version = "0.1.0"
 dependencies = [
  "contributor_registry",
  "crowdfund_vault",
+ "idempotency-guard",
  "lumen_token",
+ "matching_pool",
  "notification_interface",
+ "project_registry",
  "soroban-sdk",
+ "treasury",
 ]
 
 [[package]]
@@ -878,6 +891,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "matching_pool"
+version = "0.0.0"
+dependencies = [
+ "reentrancy-guard",
+ "soroban-sdk",
 ]
 
 [[package]]
@@ -1016,6 +1037,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "project_registry"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1052,6 +1080,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "getrandom",
+]
+
+[[package]]
+name = "reentrancy-guard"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]
@@ -1613,6 +1648,15 @@ checksum = "2e70e4c5a0e0a8a4823ad65dfe1a6930e4f4d756dcd9dd7939022b5e8c501215"
 dependencies = [
  "num-conv",
  "time-core",
+]
+
+[[package]]
+name = "treasury"
+version = "0.1.0"
+dependencies = [
+ "idempotency-guard",
+ "reentrancy-guard",
+ "soroban-sdk",
 ]
 
 [[package]]

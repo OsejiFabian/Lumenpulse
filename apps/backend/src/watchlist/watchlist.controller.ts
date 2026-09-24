@@ -49,6 +49,13 @@ export class WatchlistController {
     summary: 'Get a page of the user watchlist',
     description:
       "Returns a paginated page of the authenticated user's watchlist, optionally filtered by type. Supports the standard pagination parameters (page, limit, cursor) and returns standard pagination metadata.",
+      "Returns all items in the authenticated user's watchlist, optionally filtered by type",
+  })
+  @ApiQuery({
+    name: 'type',
+    required: false,
+    enum: WatchlistItemType,
+    description: 'Filter by item type (asset or project)',
   })
   @ApiResponse({
     status: 200,

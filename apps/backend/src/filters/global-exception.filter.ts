@@ -10,6 +10,11 @@ import { Request, Response } from 'express';
 import { REQUEST_ID_HEADER } from '../common/constants/request.constants';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import { ErrorResponse } from '../interfaces/error-response.interface';
+import { resolveNodeEnv } from '../lib/config';
+import { mapSorobanRpcErrorToApi } from '../stellar/utils/soroban-error.mapper';
+import { SorobanRpcError } from '../stellar/services/soroban-rpc-client.service';
+
+type RequestWithRequestId = Request & { requestId?: string };
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -18,7 +23,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    const request = ctx.getRequest<RequestWithRequestId>();
     const status = this.getStatus(exception);
     const requestId =
       typeof request.requestId === 'string' ? request.requestId : 'unknown';
@@ -27,14 +32,32 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     response.setHeader(REQUEST_ID_HEADER, requestId);
 
     if (status >= 500) {
-      const stack = exception instanceof Error ? exception.stack : undefined;
+      const stack = exception instanceof Error ? (exception.stack ?? '') : '';
       this.logger.error(
-        `[${requestId}] ${request.method} ${request.url} -> ${status}`,
+        JSON.stringify({
+          event: 'http_request_failed',
+          requestId,
+          method: request.method,
+          url: request.originalUrl ?? request.url,
+          statusCode: status,
+          errorCode: errorResponse.code,
+          message: errorResponse.message,
+          timestamp: new Date().toISOString(),
+        }),
         stack,
       );
     } else {
       this.logger.warn(
-        `[${requestId}] ${request.method} ${request.url} -> ${status} ${errorResponse.code}`,
+        JSON.stringify({
+          event: 'http_request_failed',
+          requestId,
+          method: request.method,
+          url: request.originalUrl ?? request.url,
+          statusCode: status,
+          errorCode: errorResponse.code,
+          message: errorResponse.message,
+          timestamp: new Date().toISOString(),
+        }),
       );
     }
 
@@ -46,7 +69,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     status: number,
     requestId: string,
   ): ErrorResponse {
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction = resolveNodeEnv() === 'production';
 
     if (exception instanceof HttpException) {
       const exceptionResponse = exception.getResponse();
@@ -64,6 +87,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           isProduction,
         ),
         details: this.getErrorDetails(responseBody, status),
+        requestId,
+      };
+    }
+
+    if (exception instanceof SorobanRpcError) {
+      const mapped = mapSorobanRpcErrorToApi(exception);
+      return {
+        code: mapped.code,
+        message: mapped.message,
+        details: mapped.details,
         requestId,
       };
     }
@@ -88,6 +121,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   private getStatus(exception: unknown): number {
     if (exception instanceof HttpException) {
       return exception.getStatus();
+    }
+
+    if (exception instanceof SorobanRpcError) {
+      return mapSorobanRpcErrorToApi(exception).status;
     }
 
     return HttpStatus.INTERNAL_SERVER_ERROR;
@@ -184,5 +221,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       default:
         return ErrorCode.SYS_INTERNAL_ERROR;
     }
+  }
+
+  private logFailedSimulationTrace(tx: unknown, result: unknown): void {
+    // Log the failed simulation trace for debugging purposes
+    this.logger.error('Simulation trace failed', {
+      transaction: tx,
+      result: result,
+    });
   }
 }

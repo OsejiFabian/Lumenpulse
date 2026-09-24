@@ -1,5 +1,8 @@
 "use client";
 
+import { WalletProvider } from "@/contexts/WalletContext";
+import { StellarConfigProvider, useStellarConfig } from "@/contexts/StellarConfigContext";
+import { ConfigErrorBanner } from "@/components/config-error-banner";
 import {
   ReactNode,
   createContext,
@@ -8,6 +11,76 @@ import {
   useEffect,
   useState,
 } from "react";
+
+/**
+ * Inner wrapper that gates the rest of the app behind a successful config load.
+ * Renders a full-page error UI if the Stellar config cannot be fetched.
+ */
+function ConfigGate({ children }: { children: ReactNode }) {
+  const { config, status, error, retry } = useStellarConfig();
+
+  const isTestnet = config?.network === "testnet";
+  const isError = status === "error";
+
+  // While loading we let the app render normally — individual components
+  // can show their own skeletons. The config is available as soon as it resolves.
+  return (
+    <>
+      {isError && (
+        <div
+          id="config-error-banner"
+          className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-between gap-4 bg-red-500/10 border-b border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 backdrop-blur-md"
+        >
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+            <span className="truncate">Degraded Mode: Unable to load Stellar configuration. Some features may be unavailable.</span>
+          </div>
+          <button
+            onClick={retry}
+            className="rounded bg-red-500/20 px-3 py-1 text-xs hover:bg-red-500/30 transition-colors shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {isTestnet && !isError && (
+        <div
+          id="testnet-banner"
+          className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-center gap-2 bg-amber-500/10 border-b border-amber-500/30 py-1.5 text-xs font-medium text-amber-400 backdrop-blur-sm"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+          You are on Stellar Testnet — assets have no real value
+        </div>
+      )}
+      {children}
+    </>
+  );
+}
+
+import { OnboardingProvider } from "@/lib/onboarding";
+import { ThemeProvider } from "@/components/theme-provider";
+import { WatchlistProvider } from "@/hooks/use-watchlist";
+
+export function Providers({ children }: { children: ReactNode }) {
+  return (
+    <StellarConfigProvider>
+      <WalletProvider>
+        <StellarProvider>
+          <ConfigGate>
+            <ThemeProvider>
+              <WatchlistProvider>
+                <OnboardingProvider>
+                  {children}
+                </OnboardingProvider>
+              </WatchlistProvider>
+            </ThemeProvider>
+          </ConfigGate>
+        </StellarProvider>
+      </WalletProvider>
+    </StellarConfigProvider>
+  );
+}
+
 import {
   isConnected as freighterIsConnected,
   getAddress as freighterGetAddress,
@@ -162,6 +235,11 @@ export function StellarProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const disconnect = useCallback(() => {
+    // Clean up wallet-scoped localStorage entries before clearing state
+    if (publicKey) {
+      localStorage.removeItem(`lumenpulse_watchlist_${publicKey}`);
+    }
+    localStorage.removeItem("activeWalletId");
     setPublicKey(null);
     setLastAddress(null);
     setStatus("disconnected");
@@ -169,7 +247,7 @@ export function StellarProvider({ children }: { children: ReactNode }) {
     setErrorType(null);
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(STORAGE_ADDRESS_KEY);
-  }, []);
+  }, [publicKey]);
 
   const resetError = useCallback(() => {
     setError(null);

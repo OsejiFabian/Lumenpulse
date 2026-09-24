@@ -1,10 +1,10 @@
-/* eslint-disable prettier/prettier */
-import { getNotifications, markAsRead as markAsReadApi } from '@/lib/notifications';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'expo-router';
+import { useAuth } from './AuthContext';
+import { getNotifications, markAsRead as markAsReadApi } from '../lib/notifications-api';
+import { getStableDeviceId, registerPushToken, deregisterCurrentDevice } from '../lib/push-token';
 
 export type Notification = {
   id: number;
@@ -26,8 +26,12 @@ type NotificationsContextType = {
   markAllAsRead: () => Promise<void>;
   registerForPushNotificationsAsync: () => Promise<string | null>;
   handleNotification: (notification: Notifications.Notification) => void;
-  notificationListener: Notifications.Subscription;
-  responseListener: Notifications.Subscription;
+  notificationListener: Notifications.Subscription | null;
+  responseListener: Notifications.Subscription | null;
+  registrationStatus: 'idle' | 'registering' | 'registered' | 'error';
+  registrationError: string | null;
+  retryRegistration: () => Promise<string | null>;
+  deregisterDevice: () => Promise<void>;
 };
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
@@ -37,23 +41,78 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const notificationListenerRef = useRef<Notifications.Subscription | null>(null);
   const responseListenerRef = useRef<Notifications.Subscription | null>(null);
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
+  const [registrationStatus, setRegistrationStatus] = useState<
+    'idle' | 'registering' | 'registered' | 'error'
+  >('idle');
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const data = await getNotifications('/notifications');
-      setNotifications(data);
+      const data = await getNotifications();
+      setNotifications(data as Notification[]);
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
     }
   }, []);
 
-  useEffect(() => {
-    fetchNotifications();
+  const registerForPushNotificationsAsync = useCallback(async () => {
+    if (!Device.isDevice || !isAuthenticated) return null;
+    setRegistrationStatus('registering');
+    setRegistrationError(null);
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        throw new Error('Push notification permission was not granted');
+      }
+      const token = (await Notifications.getExpoPushTokenAsync()).data;
+      const deviceId = await getStableDeviceId();
+      const platform = Device.osName?.toLowerCase().includes('ios') ? 'ios' : 'android';
+      let lastError = 'Unable to register push token';
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const response = await registerPushToken({
+          token,
+          deviceId,
+          platform,
+          deviceName: Device.deviceName ?? undefined,
+        });
+        if (response.success) {
+          setRegistrationStatus('registered');
+          return token;
+        }
+        lastError = response.error?.message ?? lastError;
+        if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 1000));
+      }
+      throw new Error(lastError);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to register push token';
+      setRegistrationStatus('error');
+      setRegistrationError(message);
+      return null;
+    }
+  }, [isAuthenticated]);
 
-    // Register for push notifications
-    registerForPushNotificationsAsync();
+  const deregisterDevice = useCallback(async () => {
+    if (!isAuthenticated) return;
+    await deregisterCurrentDevice();
+    setRegistrationStatus('idle');
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      void fetchNotifications();
+      void registerForPushNotificationsAsync();
+    }
+    const tokenRefreshListener = Notifications.addPushTokenListener(() => {
+      if (isAuthenticated) void registerForPushNotificationsAsync();
+    });
 
     // Clean up listeners on unmount
     return () => {
@@ -63,29 +122,9 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       if (responseListenerRef.current) {
         responseListenerRef.current.remove();
       }
+      tokenRefreshListener.remove();
     };
-  }, [fetchNotifications]);
-
-  const registerForPushNotificationsAsync = useCallback(async () => {
-    if (!Device.isDevice) {
-      alert('Must use physical device for push notifications');
-      return null;
-    }
-
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') {
-      alert('Failed to get push token for push notification!');
-      return null;
-    }
-    const token = (await Notifications.getExpoPushTokenAsync()).data;
-    console.log('Push token:', token);
-    return token;
-  }, []);
+  }, [fetchNotifications, isAuthenticated, registerForPushNotificationsAsync]);
 
   const handleNotification = useCallback((notification: Notifications.Notification) => {
     // When a notification is received while the app is in foreground
@@ -148,7 +187,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     // Listen for notification responses (when user taps on notification)
     responseListenerRef.current = Notifications.addNotificationResponseReceivedListener(
       (response) => {
-        const { notification, actionIdentifier } = response;
+        const { notification } = response;
         const { data } = notification.request.content;
 
         // Handle deep linking based on notification data
@@ -190,7 +229,11 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         registerForPushNotificationsAsync,
         handleNotification,
         notificationListener: notificationListenerRef.current!,
-        responseListener: responseListenerRef.current!,
+        responseListener: responseListenerRef.current,
+        registrationStatus,
+        registrationError,
+        retryRegistration: registerForPushNotificationsAsync,
+        deregisterDevice,
       }}
     >
       {children}

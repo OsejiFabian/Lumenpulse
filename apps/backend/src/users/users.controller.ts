@@ -44,8 +44,12 @@ import {
   DEFAULT_PAGE_SIZE,
 } from '../common/pagination';
 import { UsersListResponseDto } from './dto/users-list-response.dto';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/decorators/auth.decorators';
+import { UserRole } from './entities/user.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SharpPipe } from '../common/pipes/sharp.pipe';
+import { AuditLogAction } from '../audit/decorators/audit-log.decorator';
 
 // Unified Authenticated Request Interface
 interface RequestWithUser extends Request {
@@ -134,9 +138,17 @@ export class UsersController {
       users,
       meta: createOffsetMeta({ page, limit, total }),
     };
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get all users' })
+  @ApiResponse({ status: 200, description: 'List of all users', type: [User] })
+  async findAll(): Promise<User[]> {
+    return this.usersService.findAll();
   }
 
   @Get(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get user by ID' })
   @ApiResponse({ status: 200, description: 'User found', type: User })
   @ApiResponse({ status: 404, description: 'User not found' })
@@ -199,6 +211,7 @@ export class UsersController {
   // --- STELLAR ACCOUNT MANAGEMENT (From Feature Branch) ---
 
   @Post('me/accounts')
+  @AuditLogAction('account_linking')
   @ApiOperation({ summary: 'Link a new Stellar account to user profile' })
   @ApiResponse({ status: 201, type: StellarAccountResponseDto })
   async addStellarAccount(

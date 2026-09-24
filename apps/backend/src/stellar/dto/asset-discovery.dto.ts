@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { PaginationQueryDto, PaginationMetaDto } from '../../common/pagination';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class AssetDto {
   @ApiProperty({
@@ -73,6 +75,30 @@ export class AssetDiscoveryQueryDto extends PaginationQueryDto {
   @IsString()
   @MaxLength(64)
   q?: string;
+  q?: string;
+
+  @ApiProperty({
+    description: 'Limit number of results',
+    example: 10,
+    minimum: 1,
+    maximum: 100,
+    default: 10,
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @ApiProperty({
+    description: 'Cursor for pagination',
+    example: '123456789',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
 }
 
 export class AssetDiscoveryResponseDto {

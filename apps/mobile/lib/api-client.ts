@@ -1,11 +1,11 @@
-import config from './config';
+import { config, getEnvironmentConfig } from './config';
 
 /**
  * API Client Configuration
  * Reads from centralized config
  */
 const getApiBaseUrl = (): string => {
-  return config.api.baseUrl;
+  return getEnvironmentConfig().apiBaseUrl;
 };
 
 /**
@@ -109,6 +109,7 @@ class ApiClient {
     options: RequestInit = {},
     config: RequestConfig = {},
   ): Promise<ApiResponse<T>> {
+    this.baseUrl = getApiBaseUrl();
     const url = `${this.baseUrl}${endpoint}`;
     const headers = { ...this.defaultHeaders, ...config.headers };
 
@@ -230,6 +231,17 @@ class ApiClient {
    */
   async delete<T>(endpoint: string, config?: RequestConfig): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { method: 'DELETE' }, config);
+  }
+
+  /**
+   * DELETE request with a JSON body.
+   */
+  async deleteWithBody<T>(
+    endpoint: string,
+    body: unknown,
+    config?: RequestConfig,
+  ): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'DELETE', body: JSON.stringify(body) }, config);
   }
 }
 

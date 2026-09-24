@@ -1,5 +1,7 @@
 import { apiClient, ApiResponse } from './api-client';
 
+export type OnChainStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED' | 'PENDING';
+
 /**
  * Crowdfund Project — mirrors the on-chain ProjectData structure
  */
@@ -7,12 +9,40 @@ export interface CrowdfundProject {
   id: number;
   owner: string;
   name: string;
+  description?: string;
+  bannerUrl?: string;
   targetAmount: string;
   tokenAddress: string;
+  contractAddress?: string;
   totalDeposited: string;
   totalWithdrawn: string;
   isActive: boolean;
+  onChainStatus: OnChainStatus;
+  lastSyncedAt?: string;
   contributorCount: number;
+  roadmap?: RoadmapItem[];
+  createdAt?: string;
+}
+
+/**
+ * Roadmap milestone item
+ */
+export interface RoadmapItem {
+  id: string;
+  title: string;
+  description: string;
+  targetDate: string;
+  isCompleted: boolean;
+}
+
+/**
+ * Contributor information
+ */
+export interface Contributor {
+  publicKey: string;
+  totalContributed: string;
+  contributionCount: number;
+  lastContributionAt: string;
 }
 
 /**
@@ -32,6 +62,7 @@ export interface ContributionResponse {
   status: 'SUCCESS' | 'FAILED' | 'PENDING';
   ledger?: number;
   message?: string;
+  unsignedXdr?: string;
 }
 
 /**
@@ -90,5 +121,12 @@ export const crowdfundApi = {
    */
   async getProjectBalance(projectId: number): Promise<ApiResponse<{ balance: string }>> {
     return apiClient.get<{ balance: string }>(`/crowdfund/projects/${projectId}/balance`);
+  },
+
+  /**
+   * Fetch recent contributors for a project
+   */
+  async getContributors(projectId: number): Promise<ApiResponse<Contributor[]>> {
+    return apiClient.get<Contributor[]>(`/crowdfund/projects/${projectId}/contributors`);
   },
 };

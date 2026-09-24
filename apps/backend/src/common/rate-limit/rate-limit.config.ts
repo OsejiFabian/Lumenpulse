@@ -1,6 +1,7 @@
 import { ExecutionContext } from '@nestjs/common';
 import { ThrottlerModuleOptions, ThrottlerOptions } from '@nestjs/throttler';
 import { ThrottlerStorage } from '@nestjs/throttler';
+import { config } from '../../lib/config';
 
 interface RateLimitProfile {
   limit: number;
@@ -15,6 +16,13 @@ export interface RateLimitSettings {
   portfolioWrite: RateLimitProfile;
   watchlistRead: RateLimitProfile;
   watchlistWrite: RateLimitProfile;
+  newsRead: RateLimitProfile;
+  projectRead: RateLimitProfile;
+  crowdfundRead: RateLimitProfile;
+  stellarRead: RateLimitProfile;
+  searchRead: RateLimitProfile;
+  analyticsRead: RateLimitProfile;
+  friendbotBootstrap: RateLimitProfile;
   tracker: {
     useIp: boolean;
     useApiKey: boolean;
@@ -32,6 +40,13 @@ const DEFAULTS = {
     portfolioWrite: { limit: 20, ttl: 60_000, blockDuration: 120_000 },
     watchlistRead: { limit: 200, ttl: 60_000, blockDuration: 60_000 },
     watchlistWrite: { limit: 30, ttl: 60_000, blockDuration: 120_000 },
+    newsRead: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
+    projectRead: { limit: 100, ttl: 60_000, blockDuration: 60_000 },
+    crowdfundRead: { limit: 100, ttl: 60_000, blockDuration: 60_000 },
+    stellarRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    searchRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    analyticsRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    friendbotBootstrap: { limit: 5, ttl: 3_600_000, blockDuration: 3_600_000 },
   },
   staging: {
     global: { limit: 180, ttl: 60_000, blockDuration: 60_000 },
@@ -40,6 +55,13 @@ const DEFAULTS = {
     portfolioWrite: { limit: 12, ttl: 60_000, blockDuration: 120_000 },
     watchlistRead: { limit: 150, ttl: 60_000, blockDuration: 60_000 },
     watchlistWrite: { limit: 20, ttl: 60_000, blockDuration: 120_000 },
+    newsRead: { limit: 80, ttl: 60_000, blockDuration: 60_000 },
+    projectRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    crowdfundRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    stellarRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    searchRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    analyticsRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    friendbotBootstrap: { limit: 3, ttl: 3_600_000, blockDuration: 3_600_000 },
   },
   production: {
     global: { limit: 120, ttl: 60_000, blockDuration: 60_000 },
@@ -48,6 +70,13 @@ const DEFAULTS = {
     portfolioWrite: { limit: 10, ttl: 60_000, blockDuration: 120_000 },
     watchlistRead: { limit: 100, ttl: 60_000, blockDuration: 60_000 },
     watchlistWrite: { limit: 15, ttl: 60_000, blockDuration: 120_000 },
+    newsRead: { limit: 60, ttl: 60_000, blockDuration: 60_000 },
+    projectRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    crowdfundRead: { limit: 40, ttl: 60_000, blockDuration: 60_000 },
+    stellarRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
+    searchRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
+    analyticsRead: { limit: 30, ttl: 60_000, blockDuration: 60_000 },
+    friendbotBootstrap: { limit: 2, ttl: 3_600_000, blockDuration: 3_600_000 },
   },
 } as const;
 
@@ -84,7 +113,20 @@ function getEnvironmentName(nodeEnv: string | undefined): EnvironmentName {
 
 function resolveProfile(
   env: NodeJS.ProcessEnv,
-  key: 'global' | 'auth' | 'portfolioRead' | 'portfolioWrite' | 'watchlistRead' | 'watchlistWrite',
+  key:
+    | 'global'
+    | 'auth'
+    | 'portfolioRead'
+    | 'portfolioWrite'
+    | 'watchlistRead'
+    | 'watchlistWrite'
+    | 'newsRead'
+    | 'projectRead'
+    | 'crowdfundRead'
+    | 'stellarRead'
+    | 'searchRead'
+    | 'analyticsRead'
+    | 'friendbotBootstrap',
 ): RateLimitProfile {
   const profileDefaults = DEFAULTS[getEnvironmentName(env.NODE_ENV)][key];
   const envKeyPrefix = key
@@ -108,8 +150,29 @@ function resolveProfile(
 }
 
 export function getRateLimitSettings(
-  env: NodeJS.ProcessEnv = process.env,
+  env?: NodeJS.ProcessEnv,
 ): RateLimitSettings {
+  if (!env) {
+    return {
+      global: config.rateLimit.global,
+      auth: config.rateLimit.auth,
+      portfolioRead: config.rateLimit.portfolioRead,
+      portfolioWrite: config.rateLimit.portfolioWrite,
+      watchlistRead: config.rateLimit.watchlistRead,
+      watchlistWrite: config.rateLimit.watchlistWrite,
+      newsRead: config.rateLimit.newsRead,
+      projectRead: config.rateLimit.projectRead,
+      crowdfundRead: config.rateLimit.crowdfundRead,
+      stellarRead: config.rateLimit.stellarRead,
+      searchRead: config.rateLimit.searchRead,
+      analyticsRead: config.rateLimit.analyticsRead,
+      friendbotBootstrap: config.rateLimit.friendbotBootstrap,
+      tracker: config.rateLimit.tracker,
+      redisUrl: config.rateLimit.redisUrl,
+      redisNamespace: config.rateLimit.redisNamespace,
+    };
+  }
+
   return {
     global: resolveProfile(env, 'global'),
     auth: resolveProfile(env, 'auth'),
@@ -117,6 +180,13 @@ export function getRateLimitSettings(
     portfolioWrite: resolveProfile(env, 'portfolioWrite'),
     watchlistRead: resolveProfile(env, 'watchlistRead'),
     watchlistWrite: resolveProfile(env, 'watchlistWrite'),
+    newsRead: resolveProfile(env, 'newsRead'),
+    projectRead: resolveProfile(env, 'projectRead'),
+    crowdfundRead: resolveProfile(env, 'crowdfundRead'),
+    stellarRead: resolveProfile(env, 'stellarRead'),
+    searchRead: resolveProfile(env, 'searchRead'),
+    analyticsRead: resolveProfile(env, 'analyticsRead'),
+    friendbotBootstrap: resolveProfile(env, 'friendbotBootstrap'),
     tracker: {
       useIp: parseBoolean(env.RATE_LIMIT_TRACK_BY_IP, true),
       useApiKey: parseBoolean(env.RATE_LIMIT_TRACK_BY_API_KEY, false),
@@ -208,5 +278,59 @@ export function getWatchlistReadThrottleOverride() {
 export function getWatchlistWriteThrottleOverride() {
   return {
     default: getRateLimitSettings().watchlistWrite,
+  };
+}
+
+export function getNewsReadThrottleOverride() {
+  return {
+    default: getRateLimitSettings().newsRead,
+  };
+}
+
+export function getProjectReadThrottleOverride() {
+  return {
+    default: getRateLimitSettings().projectRead,
+  };
+}
+
+export function getCrowdfundReadThrottleOverride() {
+  return {
+    default: getRateLimitSettings().crowdfundRead,
+  };
+}
+
+export function getStellarReadThrottleOverride() {
+  return {
+    default: getRateLimitSettings().stellarRead,
+  };
+}
+
+export function getSearchReadThrottleOverride() {
+  return {
+    default: getRateLimitSettings().searchRead,
+  };
+}
+
+export function getAnalyticsReadThrottleOverride() {
+  return {
+    default: getRateLimitSettings().analyticsRead,
+  };
+}
+
+export function getFriendbotBootstrapThrottleOverride() {
+  return {
+    default: getRateLimitSettings().friendbotBootstrap,
+  };
+}
+
+export function getRegistryReadThrottleOverride() {
+  return {
+    default: getRateLimitSettings().crowdfundRead,
+  };
+}
+
+export function getRegistryWriteThrottleOverride() {
+  return {
+    default: getRateLimitSettings().portfolioWrite,
   };
 }

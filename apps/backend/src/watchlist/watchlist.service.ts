@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WatchlistItem, WatchlistItemType } from './watchlist-item.entity';
+import { QueryProfilerService } from '../common/profiling/query-profiler.service';
 import {
   AddToWatchlistDto,
   UpdateWatchlistDto,
@@ -22,6 +23,7 @@ export class WatchlistService {
   constructor(
     @InjectRepository(WatchlistItem)
     private readonly watchlistRepository: Repository<WatchlistItem>,
+    private readonly profiler: QueryProfilerService,
   ) {}
 
   /**
@@ -105,6 +107,14 @@ export class WatchlistService {
       skip: (page - 1) * limit,
       take: limit,
     });
+    const [items, total] = await this.profiler.profile(
+      () =>
+        this.watchlistRepository.findAndCount({
+          where,
+          order: { sortOrder: 'ASC', createdAt: 'DESC' },
+        }),
+      { label: 'WatchlistService.getWatchlist', thresholdMs: 100 },
+    );
 
     return {
       items: items.map((item) => this.toResponseDto(item)),
