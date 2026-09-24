@@ -13,6 +13,7 @@ import {
   WatchlistItemResponseDto,
   WatchlistResponseDto,
 } from './dto/watchlist.dto';
+import { createOffsetMeta, DEFAULT_PAGE_SIZE } from '../common/pagination';
 
 @Injectable()
 export class WatchlistService {
@@ -42,9 +43,7 @@ export class WatchlistService {
     });
 
     if (existing) {
-      throw new ConflictException(
-        `${dto.symbol} is already in your watchlist`,
-      );
+      throw new ConflictException(`${dto.symbol} is already in your watchlist`);
     }
 
     const item = this.watchlistRepository.create({
@@ -58,7 +57,7 @@ export class WatchlistService {
       sortOrder: dto.sortOrder ?? 0,
     } as Partial<WatchlistItem>);
 
-    const saved = await this.watchlistRepository.save(item as WatchlistItem);
+    const saved = await this.watchlistRepository.save(item);
     return this.toResponseDto(saved);
   }
 
@@ -75,20 +74,22 @@ export class WatchlistService {
     });
 
     if (!item) {
-      throw new NotFoundException(
-        `Watchlist item ${itemId} not found`,
-      );
+      throw new NotFoundException(`Watchlist item ${itemId} not found`);
     }
 
     await this.watchlistRepository.remove(item);
   }
 
   /**
-   * Get all watchlist items for a user
+   * Get a page of watchlist items for a user
    */
   async getWatchlist(
     userId: string,
     type?: WatchlistItemType,
+    pagination: { page: number; limit: number } = {
+      page: 1,
+      limit: DEFAULT_PAGE_SIZE,
+    },
   ): Promise<WatchlistResponseDto> {
     this.logger.log(`Fetching watchlist for user ${userId}`);
 
@@ -97,14 +98,18 @@ export class WatchlistService {
       where.type = type;
     }
 
+    const { page, limit } = pagination;
     const [items, total] = await this.watchlistRepository.findAndCount({
       where,
-      order: { sortOrder: 'ASC', createdAt: 'DESC' },
+      order: { sortOrder: 'ASC', createdAt: 'DESC', id: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
 
     return {
       items: items.map((item) => this.toResponseDto(item)),
       total,
+      meta: createOffsetMeta({ page, limit, total }),
     };
   }
 
@@ -116,18 +121,14 @@ export class WatchlistService {
     itemId: string,
     dto: UpdateWatchlistDto,
   ): Promise<WatchlistItemResponseDto> {
-    this.logger.log(
-      `Updating watchlist item ${itemId} for user ${userId}`,
-    );
+    this.logger.log(`Updating watchlist item ${itemId} for user ${userId}`);
 
     const item = await this.watchlistRepository.findOne({
       where: { id: itemId, userId },
     });
 
     if (!item) {
-      throw new NotFoundException(
-        `Watchlist item ${itemId} not found`,
-      );
+      throw new NotFoundException(`Watchlist item ${itemId} not found`);
     }
 
     if (dto.name !== undefined) item.name = dto.name;

@@ -6,6 +6,7 @@ import {
   TransactionStatus,
 } from './dto/transaction.dto';
 import { getMockTransactions } from './mocks/mock-transactions';
+import { DEFAULT_PAGE_SIZE } from '../common/pagination';
 
 interface HorizonOperation {
   id: string;
@@ -88,7 +89,7 @@ export class TransactionService {
 
   async getTransactionHistory(
     publicKey: string,
-    limit: number = 50,
+    limit: number = DEFAULT_PAGE_SIZE,
     cursor?: string,
   ): Promise<{ transactions: TransactionDto[]; nextPage?: string }> {
     this.logger.log(`Fetching transaction history for ${publicKey}`);

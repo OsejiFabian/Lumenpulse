@@ -25,6 +25,7 @@ import {
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { EmailService } from '../email/email.service';
+import { SessionDto } from './dto/session.dto';
 
 interface ChallengeData {
   nonce: string;
@@ -570,23 +571,35 @@ export class AuthService {
   }
 
   /**
-   * Get all active sessions for a user
+   * Get active sessions for a user, optionally restricted to a single page.
+   *
+   * When `pagination` is provided the query is bounded to that page and the
+   * total reflects all active sessions; otherwise the full list is returned
+   * (used by callers that need every session, e.g. logout-all flows and tests).
    */
   async getActiveSessions(
     userId: string,
-  ): Promise<{ sessions: any[]; total: number }> {
+    pagination?: { skip: number; take: number },
+  ): Promise<{ sessions: SessionDto[]; total: number }> {
     const now = new Date();
 
+    const where = {
+      userId,
+      revokedAt: IsNull(),
+      expiresAt: MoreThan(now),
+    };
+
     const tokens = await this.refreshTokenRepository.find({
-      where: {
-        userId,
-        revokedAt: IsNull(),
-        expiresAt: MoreThan(now),
-      },
-      order: { createdAt: 'DESC' },
+      where,
+      // Stable id tiebreak keeps pages deterministic when session createdAt
+      // values collide during concurrent inserts.
+      order: pagination
+        ? { createdAt: 'DESC', id: 'ASC' }
+        : { createdAt: 'DESC' },
+      ...(pagination ? { skip: pagination.skip, take: pagination.take } : {}),
     });
 
-    const sessions = tokens.map((token) => ({
+    const sessions: SessionDto[] = tokens.map((token) => ({
       id: token.id,
       deviceInfo: token.deviceInfo,
       ipAddress: token.ipAddress,
@@ -595,9 +608,13 @@ export class AuthService {
       isCurrent: false, // Will be set by controller if session ID from JWT is available
     }));
 
+    const total = pagination
+      ? await this.refreshTokenRepository.count({ where })
+      : sessions.length;
+
     return {
       sessions,
-      total: sessions.length,
+      total,
     };
   }
 

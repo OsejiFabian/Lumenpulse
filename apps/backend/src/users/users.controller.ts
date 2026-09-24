@@ -5,6 +5,7 @@ import {
   Delete,
   Patch,
   Param,
+  Query,
   Body,
   UseGuards,
   Req,
@@ -37,6 +38,12 @@ import { UpdateStellarAccountLabelDto } from './dto/update-stellar-account-label
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileResponseDto } from './dto/profile-response.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import {
+  PaginationQueryDto,
+  createOffsetMeta,
+  DEFAULT_PAGE_SIZE,
+} from '../common/pagination';
+import { UsersListResponseDto } from './dto/users-list-response.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SharpPipe } from '../common/pipes/sharp.pipe';
 
@@ -104,10 +111,29 @@ export class UsersController {
   // --- ADMIN/GENERAL ENDPOINTS ---
 
   @Get()
-  @ApiOperation({ summary: 'Get all users' })
-  @ApiResponse({ status: 200, description: 'List of all users', type: [User] })
-  async findAll(): Promise<User[]> {
-    return this.usersService.findAll();
+  @ApiOperation({
+    summary: 'Get a page of users',
+    description:
+      'Returns a paginated list of users. Supports the standard pagination parameters (page, limit, cursor) and returns standard pagination metadata.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of users',
+    type: UsersListResponseDto,
+  })
+  async findAll(
+    @Query() query: PaginationQueryDto,
+  ): Promise<UsersListResponseDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? DEFAULT_PAGE_SIZE;
+    const { users, total } = await this.usersService.findAll({
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return {
+      users,
+      meta: createOffsetMeta({ page, limit, total }),
+    };
   }
 
   @Get(':id')

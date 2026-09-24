@@ -24,6 +24,14 @@ npm run test
 npm run test:e2e
 ```
 
+## Pagination
+
+All list endpoints share one pagination contract: `page` (1-based, default 1),
+`limit` (default 20, max 100) and `cursor`, plus an identical `meta` object in
+every paginated response. See [docs/pagination.md](docs/pagination.md) for the
+full specification and per-endpoint matrix; the same summary lives in the
+Swagger description at `GET /api/docs`.
+
 ## Security defaults
 
 The backend includes:

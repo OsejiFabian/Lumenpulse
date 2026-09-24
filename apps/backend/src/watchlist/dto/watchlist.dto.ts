@@ -9,6 +9,17 @@ import {
   Min,
 } from 'class-validator';
 import { WatchlistItemType } from '../watchlist-item.entity';
+import { PaginationQueryDto, PaginationMetaDto } from '../../common/pagination';
+
+export class GetWatchlistQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({
+    enum: WatchlistItemType,
+    description: 'Filter by item type (asset or project)',
+  })
+  @IsOptional()
+  @IsEnum(WatchlistItemType)
+  type?: WatchlistItemType;
+}
 
 export class AddToWatchlistDto {
   @ApiProperty({
@@ -153,9 +164,18 @@ export class WatchlistItemResponseDto {
 }
 
 export class WatchlistResponseDto {
-  @ApiProperty({ description: 'List of watchlist items', type: [WatchlistItemResponseDto] })
+  @ApiProperty({
+    description: 'List of watchlist items',
+    type: [WatchlistItemResponseDto],
+  })
   items: WatchlistItemResponseDto[];
 
-  @ApiProperty({ description: 'Total number of items' })
+  @ApiProperty({ description: 'Total number of items across all pages' })
   total: number;
+
+  @ApiProperty({
+    description: 'Standard pagination metadata',
+    type: PaginationMetaDto,
+  })
+  meta: PaginationMetaDto;
 }
