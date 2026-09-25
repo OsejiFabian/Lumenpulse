@@ -55,6 +55,7 @@ export class WatchlistController {
     name: 'type',
     required: false,
     enum: WatchlistItemType,
+    enumName: 'WatchlistItemType',
     description: 'Filter by item type (asset or project)',
   })
   @ApiResponse({
@@ -204,6 +205,7 @@ export class WatchlistController {
     name: 'type',
     required: false,
     enum: WatchlistItemType,
+    enumName: 'WatchlistItemType',
   })
   @ApiResponse({
     status: 200,

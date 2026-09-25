@@ -2,9 +2,10 @@ import './lib/config';
 import { NestFactory } from '@nestjs/core';
 import { VersioningType } from '@nestjs/common';
 import { AppModule } from './app.module';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import { setupApp } from './bootstrap/app.setup';
 import { config } from './lib/config';
+import { createOpenApiDocument } from './openapi/openapi.document';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
@@ -71,6 +72,9 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
+  // Same builder as `scripts/generate-openapi.ts`, so the served spec and the
+  // committed openapi.json artifact never diverge.
+  const document = createOpenApiDocument(app);
   SwaggerModule.setup('api/docs', app, document);
 
   const port = config.port;
